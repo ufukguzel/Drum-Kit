@@ -1,30 +1,81 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
-
+<html lang="tr" dir="ltr">
 <head>
   <meta charset="utf-8">
-  <title>Drum Kit</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Drum Studio</title>
   <link rel="stylesheet" href="styles.css">
-  <link href="https://fonts.googleapis.com/css?family=Arvo" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Arvo:400,700|Inter:400,600,700" rel="stylesheet">
 </head>
-
 <body>
+  <main class="app">
+    <header class="app-header">
+      <h1 id="title">Drum Studio</h1>
+      <p class="subtitle">Klavye veya pad'lerle gerçek zamanlı bateri çal.</p>
+    </header>
 
-  <h1 id="title">Drum 🥁 Kit</h1>
-  <div class="set">
-    <button class="w drum">w</button>
-    <button class="a drum">a</button>
-    <button class="s drum">s</button>
-    <button class="d drum">d</button>
-    <button class="j drum">j</button>
-    <button class="k drum">k</button>
-    <button class="l drum">l</button>
-  </div>
+    <section class="status-panel" aria-label="Durum paneli">
+      <div class="status-item">
+        <span>Durum</span>
+        <strong id="app-status" class="status ready">Hazır</strong>
+      </div>
+      <div class="status-item">
+        <span>Son Vuruş</span>
+        <strong id="last-hit">-</strong>
+      </div>
+      <div class="status-item">
+        <span>Toplam Vuruş</span>
+        <strong id="hit-count">0</strong>
+      </div>
+      <div class="status-item">
+        <span>Tempo</span>
+        <strong id="tempo">-- BPM</strong>
+      </div>
+    </section>
 
-  <script src="index.js" charset="utf-8"></script>
+    <section class="controls" aria-label="Kontroller">
+      <label class="toggle">
+        <input id="power-toggle" type="checkbox" checked>
+        <span>Power</span>
+      </label>
+      <label class="slider-control" for="volume-control">
+        Ses
+        <input id="volume-control" type="range" min="0" max="100" value="80">
+        <output id="volume-value" for="volume-control">80%</output>
+      </label>
+    </section>
+
+    <section class="set" id="drum-set" aria-label="Bateri padleri">
+      <button class="w drum" data-key="w" data-name="Tom 1" aria-label="Tom 1 (W)">
+        <span class="key">W</span><span class="name">Tom 1</span>
+      </button>
+      <button class="a drum" data-key="a" data-name="Tom 3" aria-label="Tom 3 (A)">
+        <span class="key">A</span><span class="name">Tom 3</span>
+      </button>
+      <button class="s drum" data-key="s" data-name="Tom 2" aria-label="Tom 2 (S)">
+        <span class="key">S</span><span class="name">Tom 2</span>
+      </button>
+      <button class="d drum" data-key="d" data-name="Tom 4" aria-label="Tom 4 (D)">
+        <span class="key">D</span><span class="name">Tom 4</span>
+      </button>
+      <button class="j drum" data-key="j" data-name="Snare" aria-label="Snare (J)">
+        <span class="key">J</span><span class="name">Snare</span>
+      </button>
+      <button class="k drum" data-key="k" data-name="Kick" aria-label="Kick (K)">
+        <span class="key">K</span><span class="name">Kick</span>
+      </button>
+      <button class="l drum" data-key="l" data-name="Crash" aria-label="Crash (L)">
+        <span class="key">L</span><span class="name">Crash</span>
+      </button>
+    </section>
+
+    <p class="hint">İpucu: W A S D J K L tuşlarıyla çal, power'ı kapatıp sessiz prova moduna geç.</p>
+  </main>
 
   <footer>
-    Made in Ufuk
+    Made by Ufuk
   </footer>
+
+  <script src="index.js" charset="utf-8"></script>
 </body>
 </html>
