@@ -31,9 +31,13 @@
         <span>Tempo</span>
         <strong id="tempo">-- BPM</strong>
       </div>
+      <div class="status-item">
+        <span>Aktif Kit</span>
+        <strong id="active-kit">Rock</strong>
+      </div>
     </section>
 
-    <section class="controls" aria-label="Kontroller">
+    <section class="controls controls-primary" aria-label="Ana kontroller">
       <label class="toggle">
         <input id="power-toggle" type="checkbox" checked>
         <span>Power</span>
@@ -43,6 +47,39 @@
         <input id="volume-control" type="range" min="0" max="100" value="80">
         <output id="volume-value" for="volume-control">80%</output>
       </label>
+      <label class="select-control" for="kit-selector">
+        Kit
+        <select id="kit-selector">
+          <option value="rock" selected>Rock</option>
+          <option value="jazz">Jazz</option>
+          <option value="electro">Electro</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="controls controls-loop" aria-label="Kayıt ve loop kontrolleri">
+      <div class="transport" role="group" aria-label="Transport">
+        <button id="record-btn" class="btn btn-record" type="button">Kayıt Başlat</button>
+        <button id="stop-record-btn" class="btn" type="button">Kayıt Durdur</button>
+        <button id="play-loop-btn" class="btn btn-loop" type="button">Loop Çal</button>
+        <button id="stop-loop-btn" class="btn" type="button">Loop Durdur</button>
+        <button id="clear-loop-btn" class="btn btn-danger" type="button">Temizle</button>
+      </div>
+      <div class="metronome-panel">
+        <label class="toggle">
+          <input id="metronome-toggle" type="checkbox">
+          <span>Metronom</span>
+        </label>
+        <label class="slider-control" for="metronome-bpm">
+          BPM
+          <input id="metronome-bpm" type="range" min="60" max="180" value="100">
+          <output id="metronome-value" for="metronome-bpm">100</output>
+        </label>
+      </div>
+      <div class="loop-stats" aria-live="polite">
+        <div><span>Loop Süresi</span><strong id="loop-length">--</strong></div>
+        <div><span>Kayıt Olayı</span><strong id="recorded-notes">0</strong></div>
+      </div>
     </section>
 
     <section class="set" id="drum-set" aria-label="Bateri padleri">
@@ -69,7 +106,7 @@
       </button>
     </section>
 
-    <p class="hint">İpucu: W A S D J K L tuşlarıyla çal, power'ı kapatıp sessiz prova moduna geç.</p>
+    <p class="hint">İpucu: W A S D J K L ile çal. Kayıt al, loop'u döndür ve kit değiştirerek farklı tonları dene.</p>
   </main>
 
   <footer>
