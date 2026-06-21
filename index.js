@@ -114,6 +114,7 @@ const state = {
   cameraFrameRequest: null,
   cameraHasFrame: false,
   handsTracker: null,
+  cameraZones: [],
   cameraLastTips: {},
   cameraKeyCooldown: {}
 };
@@ -182,15 +183,10 @@ function drawCameraPlaceholder(message = "Kamera kapalı") {
 }
 
 function drawCameraZones(context, width, height) {
-  const zones = [
-    { key: "w", x: 0.43, y: 0.2, rx: 0.1, ry: 0.1 },
-    { key: "s", x: 0.57, y: 0.2, rx: 0.1, ry: 0.1 },
-    { key: "a", x: 0.28, y: 0.46, rx: 0.11, ry: 0.11 },
-    { key: "d", x: 0.74, y: 0.46, rx: 0.13, ry: 0.13 },
-    { key: "j", x: 0.14, y: 0.58, rx: 0.1, ry: 0.1 },
-    { key: "k", x: 0.5, y: 0.76, rx: 0.16, ry: 0.16 },
-    { key: "l", x: 0.81, y: 0.12, rx: 0.12, ry: 0.06 }
-  ];
+  const zones = state.cameraZones;
+  if (!zones.length) {
+    return;
+  }
 
   context.save();
   context.strokeStyle = "rgba(102, 220, 255, 0.46)";
@@ -218,22 +214,42 @@ function cameraVelocityThreshold() {
   return 0.052 - (normalized * 0.0005);
 }
 
-function detectDrumZone(normalizedX, normalizedY) {
-  const inRect = (x1, y1, x2, y2) => normalizedX >= x1 && normalizedX <= x2 && normalizedY >= y1 && normalizedY <= y2;
-  const inEllipse = (cx, cy, rx, ry) => {
-    const x = (normalizedX - cx) / rx;
-    const y = (normalizedY - cy) / ry;
-    return (x * x) + (y * y) <= 1;
-  };
+function syncCameraZonesFromDrumLayout() {
+  const setRect = drumSet.getBoundingClientRect();
+  if (!setRect.width || !setRect.height) {
+    state.cameraZones = [];
+    return;
+  }
 
-  if (inRect(0.69, 0.03, 0.95, 0.23)) return "l";
-  if (inEllipse(0.43, 0.2, 0.11, 0.11)) return "w";
-  if (inEllipse(0.57, 0.2, 0.11, 0.11)) return "s";
-  if (inEllipse(0.28, 0.46, 0.12, 0.12)) return "a";
-  if (inEllipse(0.74, 0.46, 0.14, 0.14)) return "d";
-  if (inEllipse(0.14, 0.58, 0.11, 0.11)) return "j";
-  if (inEllipse(0.5, 0.76, 0.18, 0.18)) return "k";
-  return null;
+  state.cameraZones = drumButtons.map((button) => {
+    const rect = button.getBoundingClientRect();
+    const centerX = ((rect.left + (rect.width / 2)) - setRect.left) / setRect.width;
+    const centerY = ((rect.top + (rect.height / 2)) - setRect.top) / setRect.height;
+    return {
+      key: button.dataset.key,
+      x: clamp(centerX, 0.03, 0.97),
+      y: clamp(centerY, 0.03, 0.97),
+      rx: clamp((rect.width / 2) / setRect.width, 0.06, 0.24),
+      ry: clamp((rect.height / 2) / setRect.height, 0.04, 0.22)
+    };
+  });
+}
+
+function detectDrumZone(normalizedX, normalizedY) {
+  let selectedKey = null;
+  let minDistance = Number.POSITIVE_INFINITY;
+
+  state.cameraZones.forEach((zone) => {
+    const x = (normalizedX - zone.x) / zone.rx;
+    const y = (normalizedY - zone.y) / zone.ry;
+    const distance = (x * x) + (y * y);
+    if (distance <= 1 && distance < minDistance) {
+      minDistance = distance;
+      selectedKey = zone.key;
+    }
+  });
+
+  return selectedKey;
 }
 
 function updateCameraStateBadge(text, isOn) {
@@ -650,6 +666,7 @@ async function startCameraMode() {
   }
 
   try {
+    syncCameraZonesFromDrumLayout();
     updateCameraStateBadge("Kamera açılıyor...", true);
     drawCameraPlaceholder("Kamera açılıyor...");
 
@@ -689,6 +706,7 @@ async function startCameraMode() {
       }
 
       if (state.handsTracker && cameraInput.readyState >= 2 && !sendingFrame) {
+        syncCameraZonesFromDrumLayout();
         sendingFrame = true;
         try {
           await state.handsTracker.send({ image: cameraInput });
@@ -1023,6 +1041,10 @@ window.addEventListener("beforeunload", () => {
   stopCameraMode();
 });
 
+window.addEventListener("resize", () => {
+  syncCameraZonesFromDrumLayout();
+});
+
 syncPadPowerState();
 applyKitSelection(state.currentKit);
 refreshLoopStats();
@@ -1030,5 +1052,6 @@ volumeValue.textContent = `${volumeControl.value}%`;
 syncBpmControls(metronomeBpm.value);
 cameraSensitivityValue.textContent = cameraSensitivity.value;
 updateCameraStateBadge("Kamera Kapalı", false);
+syncCameraZonesFromDrumLayout();
 drawCameraPlaceholder("Kamera kapalı");
 updatePassiveStatus();
