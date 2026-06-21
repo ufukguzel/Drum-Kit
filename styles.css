@@ -414,18 +414,22 @@ h1 {
   z-index: 6;
 }
 
+#camera-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
 #camera-overlay {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: block;
   object-fit: cover;
-}
-
-.camera-feed {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
   pointer-events: none;
 }
 

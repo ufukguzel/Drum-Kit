@@ -110,7 +110,9 @@ const state = {
   autoGrooveTimer: null,
   autoGrooveStep: 0,
   isCameraMode: false,
-  cameraController: null,
+  cameraStream: null,
+  cameraFrameRequest: null,
+  cameraHasFrame: false,
   handsTracker: null,
   cameraLastTips: {},
   cameraKeyCooldown: {}
@@ -570,16 +572,20 @@ function onHandsResults(results) {
     return;
   }
 
-  const frameWidth = results.image.width || cameraOverlay.width;
-  const frameHeight = results.image.height || cameraOverlay.height;
+  const frameWidth = cameraInput.videoWidth || cameraOverlay.width;
+  const frameHeight = cameraInput.videoHeight || cameraOverlay.height;
   if (cameraOverlay.width !== frameWidth || cameraOverlay.height !== frameHeight) {
     cameraOverlay.width = frameWidth;
     cameraOverlay.height = frameHeight;
   }
 
+  state.cameraHasFrame = true;
+  if (cameraState.textContent !== "Kamera Açık") {
+    updateCameraStateBadge("Kamera Açık", true);
+  }
+
   context.save();
   context.clearRect(0, 0, frameWidth, frameHeight);
-  context.drawImage(results.image, 0, 0, frameWidth, frameHeight);
   drawCameraZones(context, frameWidth, frameHeight);
 
   const now = performance.now();
@@ -603,19 +609,26 @@ function onHandsResults(results) {
 }
 
 async function stopCameraMode() {
-  if (state.cameraController && typeof state.cameraController.stop === "function") {
-    state.cameraController.stop();
+  if (state.cameraFrameRequest) {
+    window.cancelAnimationFrame(state.cameraFrameRequest);
+    state.cameraFrameRequest = null;
+  }
+
+  if (state.cameraStream) {
+    state.cameraStream.getTracks().forEach((track) => track.stop());
+    state.cameraStream = null;
   }
 
   if (state.handsTracker && typeof state.handsTracker.close === "function") {
     await state.handsTracker.close();
   }
 
-  state.cameraController = null;
   state.handsTracker = null;
   state.cameraLastTips = {};
   state.cameraKeyCooldown = {};
+  state.cameraHasFrame = false;
   state.isCameraMode = false;
+  cameraInput.srcObject = null;
   cameraStartBtn.classList.remove("active");
   updateCameraStateBadge("Kamera Kapalı", false);
   drawCameraPlaceholder("Kamera kapalı");
@@ -630,13 +643,16 @@ async function startCameraMode() {
     return;
   }
 
-  if (typeof Hands !== "function" || typeof Camera !== "function") {
+  if (typeof Hands !== "function" || !navigator.mediaDevices?.getUserMedia) {
     setStatus("Kamera kütüphanesi yüklenemedi", "error");
     returnReadyState();
     return;
   }
 
   try {
+    updateCameraStateBadge("Kamera açılıyor...", true);
+    drawCameraPlaceholder("Kamera açılıyor...");
+
     state.handsTracker = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
@@ -649,23 +665,53 @@ async function startCameraMode() {
     });
     state.handsTracker.onResults(onHandsResults);
 
-    state.cameraController = new Camera(cameraInput, {
-      onFrame: async () => {
-        if (state.handsTracker) {
-          await state.handsTracker.send({ image: cameraInput });
-        }
+    state.cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        facingMode: "user"
       },
-      width: 640,
-      height: 480
+      audio: false
     });
+    cameraInput.srcObject = state.cameraStream;
+    await cameraInput.play();
 
-    await state.cameraController.start();
     state.isCameraMode = true;
+    state.cameraHasFrame = false;
     cameraStartBtn.classList.add("active");
-    updateCameraStateBadge("Kamera Açık", true);
+    updateCameraStateBadge("Kamera başlatıldı", true);
     setStatus("Kamera Modu Aktif", "ready");
+
+    let sendingFrame = false;
+    const processCameraFrame = async () => {
+      if (!state.isCameraMode) {
+        return;
+      }
+
+      if (state.handsTracker && cameraInput.readyState >= 2 && !sendingFrame) {
+        sendingFrame = true;
+        try {
+          await state.handsTracker.send({ image: cameraInput });
+        } catch (processingError) {
+          setStatus("Kamera işleme hatası", "error");
+        } finally {
+          sendingFrame = false;
+        }
+      }
+
+      state.cameraFrameRequest = window.requestAnimationFrame(processCameraFrame);
+    };
+    state.cameraFrameRequest = window.requestAnimationFrame(processCameraFrame);
+
+    window.setTimeout(() => {
+      if (state.isCameraMode && !state.cameraHasFrame) {
+        updateCameraStateBadge("Görüntü gelmedi", false);
+        setStatus("Kamera görüntüsü alınamadı", "error");
+        returnReadyState();
+      }
+    }, 2600);
   } catch (error) {
-    stopCameraMode();
+    await stopCameraMode();
     updateCameraStateBadge("Kamera izni gerekli", false);
     setStatus("Kamera açılamadı", "error");
     returnReadyState();
