@@ -420,9 +420,9 @@ function stopAutoGroove() {
 
 function startAutoGroove() {
   if (!state.powerOn) {
-    setStatus("Power kapalıyken hazır ritim çalmaz", "error");
-    returnReadyState();
-    return;
+    state.powerOn = true;
+    powerToggle.checked = true;
+    syncPadPowerState();
   }
 
   stopRecording();
@@ -683,6 +683,9 @@ metronomeToggle.addEventListener("change", () => {
 metronomeBpm.addEventListener("input", () => {
   syncBpmControls(metronomeBpm.value);
 });
+metronomeBpm.addEventListener("change", () => {
+  syncBpmControls(metronomeBpm.value);
+});
 
 recordBtn.addEventListener("click", () => {
   ensureAudioContext();
@@ -714,6 +717,9 @@ grooveSelector.addEventListener("change", () => {
 });
 
 autoGrooveBpm.addEventListener("input", () => {
+  syncBpmControls(autoGrooveBpm.value);
+});
+autoGrooveBpm.addEventListener("change", () => {
   syncBpmControls(autoGrooveBpm.value);
 });
 
