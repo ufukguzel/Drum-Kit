@@ -73,6 +73,13 @@ const metronomeBpm = document.getElementById("metronome-bpm");
 const metronomeValue = document.getElementById("metronome-value");
 const grooveSelector = document.getElementById("groove-selector");
 const autoGrooveBpm = document.getElementById("auto-groove-bpm");
+const cameraStartBtn = document.getElementById("camera-start-btn");
+const cameraStopBtn = document.getElementById("camera-stop-btn");
+const cameraSensitivity = document.getElementById("camera-sensitivity");
+const cameraSensitivityValue = document.getElementById("camera-sensitivity-value");
+const cameraState = document.getElementById("camera-state");
+const cameraInput = document.getElementById("camera-input");
+const cameraOverlay = document.getElementById("camera-overlay");
 
 const recordBtn = document.getElementById("record-btn");
 const stopRecordBtn = document.getElementById("stop-record-btn");
@@ -101,7 +108,12 @@ const state = {
   audioContext: null,
   isAutoGroove: false,
   autoGrooveTimer: null,
-  autoGrooveStep: 0
+  autoGrooveStep: 0,
+  isCameraMode: false,
+  cameraController: null,
+  handsTracker: null,
+  cameraLastTips: {},
+  cameraKeyCooldown: {}
 };
 
 const audioBank = {};
@@ -148,6 +160,85 @@ function syncBpmControls(rawValue) {
   return bpm;
 }
 
+function drawCameraPlaceholder(message = "Kamera kapalı") {
+  const context = cameraOverlay.getContext("2d");
+  if (!context) {
+    return;
+  }
+
+  const width = cameraOverlay.width;
+  const height = cameraOverlay.height;
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = "#020915";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "rgba(100, 220, 255, 0.25)";
+  context.fillRect(8, 8, width - 16, height - 16);
+  context.fillStyle = "#a9dff2";
+  context.font = "600 14px Inter, sans-serif";
+  context.textAlign = "center";
+  context.fillText(message, width / 2, height / 2);
+}
+
+function drawCameraZones(context, width, height) {
+  const zones = [
+    { key: "w", x: 0.43, y: 0.2, rx: 0.1, ry: 0.1 },
+    { key: "s", x: 0.57, y: 0.2, rx: 0.1, ry: 0.1 },
+    { key: "a", x: 0.28, y: 0.46, rx: 0.11, ry: 0.11 },
+    { key: "d", x: 0.74, y: 0.46, rx: 0.13, ry: 0.13 },
+    { key: "j", x: 0.14, y: 0.58, rx: 0.1, ry: 0.1 },
+    { key: "k", x: 0.5, y: 0.76, rx: 0.16, ry: 0.16 },
+    { key: "l", x: 0.81, y: 0.12, rx: 0.12, ry: 0.06 }
+  ];
+
+  context.save();
+  context.strokeStyle = "rgba(102, 220, 255, 0.46)";
+  context.lineWidth = 2;
+  context.fillStyle = "rgba(102, 220, 255, 0.06)";
+  context.font = "600 12px Inter, sans-serif";
+  context.textAlign = "center";
+
+  zones.forEach((zone) => {
+    context.beginPath();
+    context.ellipse(zone.x * width, zone.y * height, zone.rx * width, zone.ry * height, 0, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.fillStyle = "rgba(215, 245, 255, 0.96)";
+    context.fillText(zone.key.toUpperCase(), zone.x * width, zone.y * height + 4);
+    context.fillStyle = "rgba(102, 220, 255, 0.06)";
+  });
+
+  context.restore();
+}
+
+function cameraVelocityThreshold() {
+  const sensitivity = Number(cameraSensitivity.value);
+  const normalized = clamp(sensitivity, 10, 70);
+  return 0.052 - (normalized * 0.0005);
+}
+
+function detectDrumZone(normalizedX, normalizedY) {
+  const inRect = (x1, y1, x2, y2) => normalizedX >= x1 && normalizedX <= x2 && normalizedY >= y1 && normalizedY <= y2;
+  const inEllipse = (cx, cy, rx, ry) => {
+    const x = (normalizedX - cx) / rx;
+    const y = (normalizedY - cy) / ry;
+    return (x * x) + (y * y) <= 1;
+  };
+
+  if (inRect(0.69, 0.03, 0.95, 0.23)) return "l";
+  if (inEllipse(0.43, 0.2, 0.11, 0.11)) return "w";
+  if (inEllipse(0.57, 0.2, 0.11, 0.11)) return "s";
+  if (inEllipse(0.28, 0.46, 0.12, 0.12)) return "a";
+  if (inEllipse(0.74, 0.46, 0.14, 0.14)) return "d";
+  if (inEllipse(0.14, 0.58, 0.11, 0.11)) return "j";
+  if (inEllipse(0.5, 0.76, 0.18, 0.18)) return "k";
+  return null;
+}
+
+function updateCameraStateBadge(text, isOn) {
+  cameraState.textContent = text;
+  cameraState.className = `camera-state ${isOn ? "on" : "off"}`;
+}
+
 function updatePassiveStatus() {
   if (!state.powerOn) {
     setStatus("Sessiz Prova", "muted");
@@ -166,6 +257,11 @@ function updatePassiveStatus() {
 
   if (state.isAutoGroove) {
     setStatus("Hazır Ritim Çalıyor", "playing");
+    return;
+  }
+
+  if (state.isCameraMode) {
+    setStatus("Kamera Modu Aktif", "ready");
     return;
   }
 
@@ -440,6 +536,139 @@ function startAutoGroove() {
 
   if (shouldRunMetronome()) {
     startMetronome();
+  }
+}
+
+function handleCameraDetections(handLandmarks, handKeyPrefix, now) {
+  [8, 12].forEach((tipIndex) => {
+    const point = handLandmarks[tipIndex];
+    if (!point) {
+      return;
+    }
+
+    const pointKey = `${handKeyPrefix}-${tipIndex}`;
+    const previous = state.cameraLastTips[pointKey];
+    const velocityY = previous ? point.y - previous.y : 0;
+    const moveDistance = previous ? Math.hypot(point.x - previous.x, point.y - previous.y) : 0;
+    const hitThreshold = cameraVelocityThreshold();
+
+    if (previous && velocityY > hitThreshold && moveDistance > hitThreshold * 0.7) {
+      const drumKey = detectDrumZone(point.x, point.y);
+      if (drumKey && (!state.cameraKeyCooldown[drumKey] || (now - state.cameraKeyCooldown[drumKey]) > 120)) {
+        state.cameraKeyCooldown[drumKey] = now;
+        triggerPad(drumKey, { fromCamera: true });
+      }
+    }
+
+    state.cameraLastTips[pointKey] = { x: point.x, y: point.y };
+  });
+}
+
+function onHandsResults(results) {
+  const context = cameraOverlay.getContext("2d");
+  if (!context) {
+    return;
+  }
+
+  const frameWidth = results.image.width || cameraOverlay.width;
+  const frameHeight = results.image.height || cameraOverlay.height;
+  if (cameraOverlay.width !== frameWidth || cameraOverlay.height !== frameHeight) {
+    cameraOverlay.width = frameWidth;
+    cameraOverlay.height = frameHeight;
+  }
+
+  context.save();
+  context.clearRect(0, 0, frameWidth, frameHeight);
+  context.drawImage(results.image, 0, 0, frameWidth, frameHeight);
+  drawCameraZones(context, frameWidth, frameHeight);
+
+  const now = performance.now();
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length) {
+    results.multiHandLandmarks.forEach((landmarks, index) => {
+      const handedness = results.multiHandedness?.[index]?.label || `hand-${index}`;
+      const handId = `${handedness}-${index}`;
+      handleCameraDetections(landmarks, handId, now);
+
+      if (typeof drawConnectors === "function" && typeof HAND_CONNECTIONS !== "undefined") {
+        drawConnectors(context, landmarks, HAND_CONNECTIONS, { color: "#2ec9ff", lineWidth: 2 });
+      }
+      if (typeof drawLandmarks === "function") {
+        drawLandmarks(context, [landmarks[8], landmarks[12]], { color: "#ff5c9a", fillColor: "#ffdbe8", radius: 4 });
+      }
+    });
+  } else {
+    state.cameraLastTips = {};
+  }
+  context.restore();
+}
+
+async function stopCameraMode() {
+  if (state.cameraController && typeof state.cameraController.stop === "function") {
+    state.cameraController.stop();
+  }
+
+  if (state.handsTracker && typeof state.handsTracker.close === "function") {
+    await state.handsTracker.close();
+  }
+
+  state.cameraController = null;
+  state.handsTracker = null;
+  state.cameraLastTips = {};
+  state.cameraKeyCooldown = {};
+  state.isCameraMode = false;
+  cameraStartBtn.classList.remove("active");
+  updateCameraStateBadge("Kamera Kapalı", false);
+  drawCameraPlaceholder("Kamera kapalı");
+  updatePassiveStatus();
+}
+
+async function startCameraMode() {
+  ensureAudioContext();
+  stopAutoGroove();
+
+  if (state.isCameraMode) {
+    return;
+  }
+
+  if (typeof Hands !== "function" || typeof Camera !== "function") {
+    setStatus("Kamera kütüphanesi yüklenemedi", "error");
+    returnReadyState();
+    return;
+  }
+
+  try {
+    state.handsTracker = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+    state.handsTracker.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.65,
+      minTrackingConfidence: 0.55,
+      selfieMode: true
+    });
+    state.handsTracker.onResults(onHandsResults);
+
+    state.cameraController = new Camera(cameraInput, {
+      onFrame: async () => {
+        if (state.handsTracker) {
+          await state.handsTracker.send({ image: cameraInput });
+        }
+      },
+      width: 640,
+      height: 480
+    });
+
+    await state.cameraController.start();
+    state.isCameraMode = true;
+    cameraStartBtn.classList.add("active");
+    updateCameraStateBadge("Kamera Açık", true);
+    setStatus("Kamera Modu Aktif", "ready");
+  } catch (error) {
+    stopCameraMode();
+    updateCameraStateBadge("Kamera izni gerekli", false);
+    setStatus("Kamera açılamadı", "error");
+    returnReadyState();
   }
 }
 
@@ -732,9 +961,28 @@ stopGrooveBtn.addEventListener("click", () => {
   stopAutoGroove();
 });
 
+cameraSensitivity.addEventListener("input", () => {
+  cameraSensitivityValue.textContent = cameraSensitivity.value;
+});
+
+cameraStartBtn.addEventListener("click", () => {
+  startCameraMode();
+});
+
+cameraStopBtn.addEventListener("click", () => {
+  stopCameraMode();
+});
+
+window.addEventListener("beforeunload", () => {
+  stopCameraMode();
+});
+
 syncPadPowerState();
 applyKitSelection(state.currentKit);
 refreshLoopStats();
 volumeValue.textContent = `${volumeControl.value}%`;
 syncBpmControls(metronomeBpm.value);
+cameraSensitivityValue.textContent = cameraSensitivity.value;
+updateCameraStateBadge("Kamera Kapalı", false);
+drawCameraPlaceholder("Kamera kapalı");
 updatePassiveStatus();

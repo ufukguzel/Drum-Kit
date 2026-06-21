@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Drum Studio</title>
-  <link rel="stylesheet" href="styles.css?v=20260621-2">
+  <link rel="stylesheet" href="styles.css?v=20260621-3">
   <link href="https://fonts.googleapis.com/css?family=Arvo:400,700|Inter:400,600,700" rel="stylesheet">
 </head>
 <body>
@@ -92,6 +92,16 @@
         <button id="start-groove-btn" class="btn btn-groove" type="button">Hazır Ritmi Çal</button>
         <button id="stop-groove-btn" class="btn" type="button">Hazır Ritmi Durdur</button>
       </div>
+      <div class="camera-panel" aria-label="Kamera ile çalma">
+        <button id="camera-start-btn" class="btn btn-camera" type="button">Kamera Modu Başlat</button>
+        <button id="camera-stop-btn" class="btn" type="button">Kamera Modu Durdur</button>
+        <label class="slider-control" for="camera-sensitivity">
+          Hassasiyet
+          <input id="camera-sensitivity" type="range" min="10" max="70" value="32">
+          <output id="camera-sensitivity-value" for="camera-sensitivity">32</output>
+        </label>
+        <strong id="camera-state" class="camera-state off">Kamera Kapalı</strong>
+      </div>
       <div class="loop-stats" aria-live="polite">
         <div><span>Loop Süresi</span><strong id="loop-length">--</strong></div>
         <div><span>Kayıt Olayı</span><strong id="recorded-notes">0</strong></div>
@@ -99,6 +109,12 @@
     </section>
 
     <section class="set" id="drum-set" aria-label="Bateri padleri">
+      <div class="stage-rack" aria-hidden="true"></div>
+      <div class="kick-pedal" aria-hidden="true"></div>
+      <div class="camera-preview" aria-hidden="true">
+        <canvas id="camera-overlay" width="320" height="220"></canvas>
+      </div>
+      <video id="camera-input" class="camera-feed" autoplay playsinline muted></video>
       <button class="w drum" data-key="w" data-name="Tom 1" aria-label="Tom 1 (W)">
         <span class="key">W</span><span class="name">Tom 1</span>
       </button>
@@ -122,13 +138,16 @@
       </button>
     </section>
 
-    <p class="hint">İpucu: BPM girip Hazır Ritmi Çal ile otomatik bateri başlatabilir, ardından kit değiştirerek tonu anında değiştirebilirsin.</p>
+    <p class="hint">İpucu: Kamera Modu Başlat ile ellerini havada davul setinin bölgelerine vurup gerçek zamanlı çalabilirsin.</p>
   </main>
 
   <footer>
     Made by Ufuk
   </footer>
 
-  <script src="index.js?v=20260621-2" charset="utf-8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="index.js?v=20260621-3" charset="utf-8"></script>
 </body>
 </html>
