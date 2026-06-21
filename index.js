@@ -367,10 +367,6 @@ function animateDrum(key) {
   setTimeout(() => {
     activeButton.classList.remove("hit");
   }, 220);
-
-  drumSet.classList.remove("rumble");
-  void drumSet.offsetWidth;
-  drumSet.classList.add("rumble");
 }
 
 function playElectroLayer(key, gainLevel) {
