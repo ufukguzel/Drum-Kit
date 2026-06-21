@@ -208,10 +208,23 @@ function drawCameraZones(context, width, height) {
   context.restore();
 }
 
-function cameraVelocityThreshold() {
+function getCameraPhysicsProfile() {
   const sensitivity = Number(cameraSensitivity.value);
-  const normalized = clamp(sensitivity, 10, 70);
-  return 0.052 - (normalized * 0.0005);
+  const normalized = (clamp(sensitivity, 10, 70) - 10) / 60;
+  return {
+    minDownVelocity: 1.15 - (normalized * 0.72),
+    minDownTravel: 0.05 - (normalized * 0.025),
+    reboundVelocity: -0.16 + (normalized * 0.11),
+    minBrakeAcceleration: 14 - (normalized * 6),
+    cooldownMs: 130 - Math.round(normalized * 40),
+    maxUsefulVelocity: 2.35
+  };
+}
+
+function impactGainFromPhysics(profile, peakVelocity, travelDistance) {
+  const velocityWeight = clamp((peakVelocity - profile.minDownVelocity) / (profile.maxUsefulVelocity - profile.minDownVelocity), 0, 1);
+  const travelWeight = clamp(travelDistance / profile.minDownTravel, 0, 1.4);
+  return clamp(0.35 + (velocityWeight * 0.55) + (travelWeight * 0.2), 0.25, 1.2);
 }
 
 function syncCameraZonesFromDrumLayout() {
@@ -401,7 +414,7 @@ function playElectroLayer(key, gainLevel) {
   osc.stop(now + 0.12);
 }
 
-function playSound(key, kitName) {
+function playSound(key, kitName, velocityGain = 1) {
   const baseAudio = audioBank[key];
   const kit = KIT_PRESETS[kitName] || KIT_PRESETS.rock;
   if (!baseAudio) {
@@ -411,15 +424,16 @@ function playSound(key, kitName) {
   const playback = baseAudio.cloneNode();
   const masterVolume = Number(volumeControl.value) / 100;
   const perKeyGain = kit.keyGain[key] || 1;
+  const dynamics = clamp(velocityGain, 0.2, 1.35);
 
   playback.playbackRate = kit.rates[key] || 1;
-  playback.volume = clamp(masterVolume * kit.masterGain * perKeyGain, 0, 1);
+  playback.volume = clamp(masterVolume * kit.masterGain * perKeyGain * dynamics, 0, 1);
   playback.play().catch(() => {
     setStatus("Ses başlatılamadı", "error");
   });
 
   if (kit.synthLayer && state.powerOn) {
-    playElectroLayer(key, clamp(masterVolume, 0.25, 1));
+    playElectroLayer(key, clamp(masterVolume * dynamics, 0.25, 1));
   }
 }
 
@@ -554,6 +568,8 @@ function startAutoGroove() {
 }
 
 function handleCameraDetections(handLandmarks, handKeyPrefix, now) {
+  const physics = getCameraPhysicsProfile();
+
   [8, 12].forEach((tipIndex) => {
     const point = handLandmarks[tipIndex];
     if (!point) {
@@ -562,19 +578,82 @@ function handleCameraDetections(handLandmarks, handKeyPrefix, now) {
 
     const pointKey = `${handKeyPrefix}-${tipIndex}`;
     const previous = state.cameraLastTips[pointKey];
-    const velocityY = previous ? point.y - previous.y : 0;
-    const moveDistance = previous ? Math.hypot(point.x - previous.x, point.y - previous.y) : 0;
-    const hitThreshold = cameraVelocityThreshold();
 
-    if (previous && velocityY > hitThreshold && moveDistance > hitThreshold * 0.7) {
-      const drumKey = detectDrumZone(point.x, point.y);
-      if (drumKey && (!state.cameraKeyCooldown[drumKey] || (now - state.cameraKeyCooldown[drumKey]) > 120)) {
-        state.cameraKeyCooldown[drumKey] = now;
-        triggerPad(drumKey, { fromCamera: true });
+    if (!previous) {
+      state.cameraLastTips[pointKey] = {
+        x: point.x,
+        y: point.y,
+        smoothX: point.x,
+        smoothY: point.y,
+        ts: now,
+        velocityY: 0,
+        phase: "idle",
+        activeZone: null,
+        downStartY: point.y,
+        peakDownVelocity: 0
+      };
+      return;
+    }
+
+    const deltaTime = clamp((now - previous.ts) / 1000, 1 / 240, 0.08);
+    const smoothX = (previous.smoothX * 0.58) + (point.x * 0.42);
+    const smoothY = (previous.smoothY * 0.58) + (point.y * 0.42);
+    const velocityY = (smoothY - previous.smoothY) / deltaTime;
+    const accelerationY = (velocityY - previous.velocityY) / deltaTime;
+    const zone = detectDrumZone(smoothX, smoothY);
+
+    let phase = previous.phase;
+    let activeZone = previous.activeZone;
+    let downStartY = previous.downStartY;
+    let peakDownVelocity = previous.peakDownVelocity;
+
+    if (zone && velocityY > physics.minDownVelocity) {
+      if (phase !== "descending" || activeZone !== zone) {
+        phase = "descending";
+        activeZone = zone;
+        downStartY = smoothY;
+        peakDownVelocity = velocityY;
+      } else {
+        peakDownVelocity = Math.max(peakDownVelocity, velocityY);
       }
     }
 
-    state.cameraLastTips[pointKey] = { x: point.x, y: point.y };
+    if (phase === "descending" && zone && activeZone === zone) {
+      const travelDistance = smoothY - downStartY;
+      const isBraking = accelerationY < -physics.minBrakeAcceleration;
+      const isRebounding = velocityY < physics.reboundVelocity;
+      const readyForImpact = (travelDistance >= physics.minDownTravel) && (peakDownVelocity >= physics.minDownVelocity);
+      const cooldownKey = zone;
+      const cooldownPassed = !state.cameraKeyCooldown[cooldownKey] || (now - state.cameraKeyCooldown[cooldownKey]) > physics.cooldownMs;
+
+      if (readyForImpact && cooldownPassed && (isBraking || isRebounding)) {
+        state.cameraKeyCooldown[cooldownKey] = now;
+        const velocityGain = impactGainFromPhysics(physics, peakDownVelocity, travelDistance);
+        triggerPad(zone, { fromCamera: true, velocityGain });
+        phase = "rebound";
+        downStartY = smoothY;
+        peakDownVelocity = 0;
+      }
+    }
+
+    if (!zone && Math.abs(velocityY) < 0.25) {
+      phase = "idle";
+      activeZone = null;
+      peakDownVelocity = 0;
+    }
+
+    state.cameraLastTips[pointKey] = {
+      x: point.x,
+      y: point.y,
+      smoothX,
+      smoothY,
+      ts: now,
+      velocityY,
+      phase,
+      activeZone,
+      downStartY,
+      peakDownVelocity
+    };
   });
 }
 
@@ -603,15 +682,19 @@ function onHandsResults(results) {
   const now = performance.now();
   if (results.multiHandLandmarks && results.multiHandLandmarks.length) {
     results.multiHandLandmarks.forEach((landmarks, index) => {
+      const mirroredLandmarks = landmarks.map((landmark) => ({
+        ...landmark,
+        x: 1 - landmark.x
+      }));
       const handedness = results.multiHandedness?.[index]?.label || `hand-${index}`;
       const handId = `${handedness}-${index}`;
-      handleCameraDetections(landmarks, handId, now);
+      handleCameraDetections(mirroredLandmarks, handId, now);
 
       if (typeof drawConnectors === "function" && typeof HAND_CONNECTIONS !== "undefined") {
-        drawConnectors(context, landmarks, HAND_CONNECTIONS, { color: "#2ec9ff", lineWidth: 2 });
+        drawConnectors(context, mirroredLandmarks, HAND_CONNECTIONS, { color: "#2ec9ff", lineWidth: 2 });
       }
       if (typeof drawLandmarks === "function") {
-        drawLandmarks(context, [landmarks[8], landmarks[12]], { color: "#ff5c9a", fillColor: "#ffdbe8", radius: 4 });
+        drawLandmarks(context, [mirroredLandmarks[8], mirroredLandmarks[12]], { color: "#ff5c9a", fillColor: "#ffdbe8", radius: 4 });
       }
     });
   } else {
@@ -888,6 +971,7 @@ function triggerPad(key, options = {}) {
   }
 
   const kitName = options.forcedKit || state.currentKit;
+  const velocityGain = options.velocityGain || 1;
   animateDrum(normalizedKey);
 
   if (!state.powerOn) {
@@ -896,7 +980,7 @@ function triggerPad(key, options = {}) {
     return;
   }
 
-  playSound(normalizedKey, kitName);
+  playSound(normalizedKey, kitName, velocityGain);
   registerHit(normalizedKey, kitName);
 
   if (state.isRecording && !options.fromLoop && !options.fromAuto) {
