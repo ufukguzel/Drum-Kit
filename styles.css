@@ -270,10 +270,18 @@ h1 {
 }
 
 .set {
-  margin: 6px auto 0;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  margin: 8px auto 0;
+  position: relative;
+  width: min(100%, 840px);
+  height: min(58vw, 500px);
+  min-height: 360px;
+  border-radius: 24px;
+  border: 1px solid rgba(149, 171, 219, 0.22);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(184, 204, 249, 0.28), transparent 44%),
+    linear-gradient(180deg, rgba(34, 42, 76, 0.92) 0%, rgba(26, 33, 61, 0.92) 60%, rgba(13, 17, 33, 0.96) 100%);
+  box-shadow: inset 0 -34px 70px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
 }
 
 .set.rumble {
@@ -288,87 +296,77 @@ h1 {
   100% { transform: translateX(0); }
 }
 
-.w {
-  background-image: url(/images/tom1.png);
-}
-
-.a {
-  background-image: url(/images/tom3.png);
-}
-
-.s {
-  background-image: url(/images/tom2.png);
-}
-
-.d {
-  background-image: url(/images/tom4.png);
-}
-
-.j {
-  background-image: url(/images/snare.png);
-}
-
-.k {
-  background-image: url(/images/kick.png);
-}
-
-.l {
-  background-image: url(/images/crash.png);
-}
-
 .drum {
+  --base-transform: translateX(0);
   outline: none;
-  border: 2px solid rgba(227, 236, 255, 0.25);
-  border-radius: 18px;
+  position: absolute;
+  border: 2px solid rgba(243, 247, 255, 0.4);
+  border-radius: 999px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  align-items: flex-start;
-  width: 100%;
-  min-height: 136px;
-  aspect-ratio: 1 / 1;
-  padding: 10px 12px;
+  align-items: center;
+  width: 140px;
+  height: 140px;
+  padding: 10px;
   text-align: left;
-  background-color: #f7f7f7;
-  background-size: cover;
-  background-position: center;
-  position: relative;
+  background: radial-gradient(circle at 48% 35%, #9e1638 0%, #8d1434 38%, #531129 100%);
+  box-shadow:
+    inset 0 0 0 7px rgba(197, 207, 231, 0.28),
+    inset 0 -22px 40px rgba(0, 0, 0, 0.48),
+    0 9px 20px rgba(0, 0, 0, 0.4);
   overflow: hidden;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+  transform: var(--base-transform);
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, filter 120ms ease;
+}
+
+.drum::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: inherit;
+  border: 2px solid rgba(255, 255, 255, 0.22);
 }
 
 .drum::after {
   content: "";
   position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(7, 11, 21, 0.05), rgba(6, 8, 17, 0.58));
+  width: 44%;
+  height: 44%;
+  top: 14%;
+  left: 14%;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
 .drum .key,
 .drum .name {
   position: relative;
   z-index: 1;
-  text-shadow: 1px 1px 0 #000;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.55);
 }
 
 .drum .key {
-  font-size: 2.4rem;
+  font-size: 2rem;
   line-height: 1;
   font-family: "Arvo", cursive;
-  color: #ffe9f6;
+  color: #fdf2f8;
+  align-self: flex-start;
 }
 
 .drum .name {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  color: #d6f2ff;
+  color: #e6f6ff;
+  align-self: center;
 }
 
 .drum:hover {
-  transform: translateY(-2px);
+  transform: var(--base-transform) translateY(-3px);
   border-color: rgba(255, 255, 255, 0.55);
 }
 
@@ -377,7 +375,7 @@ h1 {
 }
 
 .drum.pressed {
-  transform: translateY(2px) scale(0.98);
+  transform: var(--base-transform) translateY(2px) scale(0.98);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5), 0 0 32px var(--kit-glow);
 }
 
@@ -398,6 +396,82 @@ h1 {
   filter: grayscale(1) brightness(0.6);
 }
 
+.w {
+  top: 19%;
+  left: 34%;
+}
+
+.s {
+  top: 19%;
+  right: 34%;
+}
+
+.a {
+  top: 39%;
+  left: 21%;
+}
+
+.d {
+  top: 39%;
+  right: 21%;
+  width: 158px;
+  height: 158px;
+}
+
+.j {
+  top: 47%;
+  left: 6%;
+  width: 132px;
+  height: 132px;
+  background: radial-gradient(circle at 48% 35%, #aeb9c9 0%, #7f8ea8 42%, #4f5b73 100%);
+}
+
+.k {
+  bottom: 5%;
+  left: 50%;
+  width: 210px;
+  height: 210px;
+  --base-transform: translateX(-50%);
+  background: radial-gradient(circle at 50% 38%, #273447 0%, #1a2433 53%, #0a111d 100%);
+}
+
+.k .key {
+  font-size: 2.3rem;
+}
+
+.l {
+  top: 7%;
+  left: 4%;
+  width: 190px;
+  height: 72px;
+  border-radius: 60% 60% 56% 56%;
+  background: radial-gradient(circle at 35% 30%, #ffe9a9 0%, #f8c95f 42%, #9b6d20 100%);
+  border-color: rgba(255, 237, 188, 0.65);
+}
+
+.l::before {
+  inset: 8px;
+  border-radius: inherit;
+  border-width: 1px;
+}
+
+.l::after {
+  width: 30%;
+  height: 24%;
+  top: 18%;
+  left: 18%;
+}
+
+.l .key,
+.l .name {
+  color: #352108;
+  text-shadow: none;
+}
+
+.l .name {
+  align-self: flex-start;
+}
+
 .hint {
   margin-top: 14px;
   color: var(--text-muted);
@@ -411,7 +485,17 @@ footer {
 
 @media (max-width: 920px) {
   .set {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    height: min(72vw, 470px);
+  }
+
+  .l {
+    width: 160px;
+    height: 64px;
+  }
+
+  .k {
+    width: 182px;
+    height: 182px;
   }
 }
 
@@ -470,17 +554,46 @@ footer {
   }
 
   .set {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
+    width: 100%;
+    min-height: 380px;
+    height: 64vw;
+    max-height: 430px;
+    border-radius: 18px;
   }
 
   .drum .key {
-    font-size: 2rem;
+    font-size: 1.7rem;
   }
 
   .drum {
-    min-height: 108px;
-    padding: 8px 10px;
+    width: 108px;
+    height: 108px;
+    padding: 8px;
+  }
+
+  .d {
+    width: 118px;
+    height: 118px;
+    right: 16%;
+  }
+
+  .j {
+    width: 98px;
+    height: 98px;
+    left: 4%;
+  }
+
+  .k {
+    width: 150px;
+    height: 150px;
+    bottom: 5%;
+  }
+
+  .l {
+    width: 126px;
+    height: 54px;
+    top: 8%;
+    left: 3%;
   }
 
   .hint {
@@ -491,7 +604,38 @@ footer {
 
 @media (max-width: 420px) {
   .set {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    height: 78vw;
+    min-height: 330px;
+  }
+
+  .drum {
+    width: 90px;
+    height: 90px;
+  }
+
+  .d {
+    width: 96px;
+    height: 96px;
+  }
+
+  .j {
+    width: 84px;
+    height: 84px;
+  }
+
+  .k {
+    width: 122px;
+    height: 122px;
+    bottom: 4%;
+  }
+
+  .l {
+    width: 104px;
+    height: 46px;
+  }
+
+  .drum .name {
+    font-size: 0.76rem;
   }
 
   .btn {
