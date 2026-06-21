@@ -76,6 +76,22 @@
           <output id="metronome-value" for="metronome-bpm">100</output>
         </label>
       </div>
+      <div class="groove-panel" aria-label="Hazır BPM groove">
+        <label class="select-control" for="groove-selector">
+          Groove
+          <select id="groove-selector">
+            <option value="rock" selected>Rock Beat</option>
+            <option value="funk">Funk Beat</option>
+            <option value="halftime">Half-Time Beat</option>
+          </select>
+        </label>
+        <label class="number-control" for="auto-groove-bpm">
+          BPM
+          <input id="auto-groove-bpm" type="number" min="60" max="220" value="100">
+        </label>
+        <button id="start-groove-btn" class="btn btn-groove" type="button">Hazır Ritmi Çal</button>
+        <button id="stop-groove-btn" class="btn" type="button">Hazır Ritmi Durdur</button>
+      </div>
       <div class="loop-stats" aria-live="polite">
         <div><span>Loop Süresi</span><strong id="loop-length">--</strong></div>
         <div><span>Kayıt Olayı</span><strong id="recorded-notes">0</strong></div>
@@ -106,7 +122,7 @@
       </button>
     </section>
 
-    <p class="hint">İpucu: W A S D J K L ile çal. Kayıt al, loop'u döndür ve kit değiştirerek farklı tonları dene.</p>
+    <p class="hint">İpucu: BPM girip Hazır Ritmi Çal ile otomatik bateri başlatabilir, ardından kit değiştirerek tonu anında değiştirebilirsin.</p>
   </main>
 
   <footer>

@@ -30,6 +30,30 @@ const KIT_PRESETS = {
   }
 };
 
+const GROOVE_PATTERNS = {
+  rock: {
+    label: "Rock Beat",
+    steps: [
+      ["k", "l"], [], ["l"], [], ["j", "l"], [], ["l"], [],
+      ["k", "l"], [], ["l"], ["a"], ["j", "l"], [], ["l"], ["s"]
+    ]
+  },
+  funk: {
+    label: "Funk Beat",
+    steps: [
+      ["k", "l"], [], ["k"], ["l"], ["j"], ["l"], ["k"], [],
+      ["k", "l"], ["a"], ["j"], ["l"], ["k"], [], ["j", "l"], ["d"]
+    ]
+  },
+  halftime: {
+    label: "Half-Time Beat",
+    steps: [
+      ["k", "l"], [], [], ["l"], [], ["a"], [], [],
+      ["k", "l"], [], [], ["l"], ["j"], ["s"], [], ["d"]
+    ]
+  }
+};
+
 const drumButtons = Array.from(document.querySelectorAll(".drum"));
 const appContainer = document.querySelector(".app");
 const appStatus = document.getElementById("app-status");
@@ -47,12 +71,16 @@ const kitSelector = document.getElementById("kit-selector");
 const metronomeToggle = document.getElementById("metronome-toggle");
 const metronomeBpm = document.getElementById("metronome-bpm");
 const metronomeValue = document.getElementById("metronome-value");
+const grooveSelector = document.getElementById("groove-selector");
+const autoGrooveBpm = document.getElementById("auto-groove-bpm");
 
 const recordBtn = document.getElementById("record-btn");
 const stopRecordBtn = document.getElementById("stop-record-btn");
 const playLoopBtn = document.getElementById("play-loop-btn");
 const stopLoopBtn = document.getElementById("stop-loop-btn");
 const clearLoopBtn = document.getElementById("clear-loop-btn");
+const startGrooveBtn = document.getElementById("start-groove-btn");
+const stopGrooveBtn = document.getElementById("stop-groove-btn");
 const drumSet = document.getElementById("drum-set");
 
 const state = {
@@ -70,7 +98,10 @@ const state = {
   loopTimeouts: [],
   metronomeTimer: null,
   metronomeBeat: 0,
-  audioContext: null
+  audioContext: null,
+  isAutoGroove: false,
+  autoGrooveTimer: null,
+  autoGrooveStep: 0
 };
 
 const audioBank = {};
@@ -91,6 +122,32 @@ function setStatus(text, mode) {
   appStatus.className = `status ${mode}`;
 }
 
+function normalizeBpm(rawValue) {
+  const parsedValue = Number(rawValue);
+  if (!Number.isFinite(parsedValue)) {
+    return 100;
+  }
+  return clamp(Math.round(parsedValue), 60, 220);
+}
+
+function syncBpmControls(rawValue) {
+  const bpm = normalizeBpm(rawValue);
+  metronomeBpm.value = String(bpm);
+  metronomeValue.textContent = String(bpm);
+  autoGrooveBpm.value = String(bpm);
+
+  if (state.metronomeTimer) {
+    stopMetronome();
+    startMetronome();
+  }
+
+  if (state.isAutoGroove) {
+    restartAutoGroove();
+  }
+
+  return bpm;
+}
+
 function updatePassiveStatus() {
   if (!state.powerOn) {
     setStatus("Sessiz Prova", "muted");
@@ -104,6 +161,11 @@ function updatePassiveStatus() {
 
   if (state.isLooping) {
     setStatus("Loop Çalıyor", "playing");
+    return;
+  }
+
+  if (state.isAutoGroove) {
+    setStatus("Hazır Ritim Çalıyor", "playing");
     return;
   }
 
@@ -308,6 +370,79 @@ function stopMetronome() {
   state.metronomeTimer = null;
 }
 
+function getAutoGrooveStepMs() {
+  return (60000 / normalizeBpm(autoGrooveBpm.value)) / 4;
+}
+
+function playAutoGrooveStep() {
+  if (!state.isAutoGroove) {
+    return;
+  }
+
+  const pattern = GROOVE_PATTERNS[grooveSelector.value] || GROOVE_PATTERNS.rock;
+  const stepNotes = pattern.steps[state.autoGrooveStep % pattern.steps.length] || [];
+
+  stepNotes.forEach((noteKey) => {
+    triggerPad(noteKey, { fromAuto: true });
+  });
+
+  state.autoGrooveStep += 1;
+}
+
+function restartAutoGroove() {
+  if (!state.isAutoGroove) {
+    return;
+  }
+
+  if (state.autoGrooveTimer) {
+    window.clearInterval(state.autoGrooveTimer);
+  }
+
+  state.autoGrooveTimer = window.setInterval(() => {
+    playAutoGrooveStep();
+  }, getAutoGrooveStepMs());
+}
+
+function stopAutoGroove() {
+  if (state.autoGrooveTimer) {
+    window.clearInterval(state.autoGrooveTimer);
+    state.autoGrooveTimer = null;
+  }
+
+  if (!state.isAutoGroove) {
+    return;
+  }
+
+  state.isAutoGroove = false;
+  startGrooveBtn.classList.remove("active");
+  updatePassiveStatus();
+}
+
+function startAutoGroove() {
+  if (!state.powerOn) {
+    setStatus("Power kapalıyken hazır ritim çalmaz", "error");
+    returnReadyState();
+    return;
+  }
+
+  stopRecording();
+  stopLoopPlayback();
+  stopAutoGroove();
+
+  syncBpmControls(autoGrooveBpm.value);
+  state.isAutoGroove = true;
+  state.autoGrooveStep = 0;
+  startGrooveBtn.classList.add("active");
+  setStatus("Hazır Ritim Çalıyor", "playing");
+
+  playAutoGrooveStep();
+  restartAutoGroove();
+
+  if (shouldRunMetronome()) {
+    startMetronome();
+  }
+}
+
 function refreshLoopStats() {
   recordedNotes.textContent = String(state.recordedEvents.length);
   if (!state.loopLengthMs) {
@@ -365,6 +500,7 @@ function startRecording() {
     return;
   }
 
+  stopAutoGroove();
   stopLoopPlayback();
   state.recordedEvents = [];
   state.loopLengthMs = 0;
@@ -403,6 +539,8 @@ function startLoopPlayback() {
     returnReadyState();
     return;
   }
+
+  stopAutoGroove();
 
   if (!state.loopLengthMs) {
     finalizeLoopLength();
@@ -472,13 +610,13 @@ function triggerPad(key, options = {}) {
   playSound(normalizedKey, kitName);
   registerHit(normalizedKey, kitName);
 
-  if (state.isRecording && !options.fromLoop) {
+  if (state.isRecording && !options.fromLoop && !options.fromAuto) {
     addRecordedEvent(normalizedKey, kitName);
     setStatus("Kayıt Alınıyor", "recording");
     return;
   }
 
-  if (!state.isLooping) {
+  if (!state.isLooping && !state.isAutoGroove) {
     setStatus("Çalıyor", "playing");
     returnReadyState();
   }
@@ -514,6 +652,9 @@ powerToggle.addEventListener("change", () => {
   syncPadPowerState();
 
   if (!state.powerOn) {
+    stopAutoGroove();
+    stopLoopPlayback();
+    stopRecording();
     stopMetronome();
   } else if (shouldRunMetronome()) {
     startMetronome();
@@ -540,11 +681,7 @@ metronomeToggle.addEventListener("change", () => {
 });
 
 metronomeBpm.addEventListener("input", () => {
-  metronomeValue.textContent = metronomeBpm.value;
-  if (state.metronomeTimer) {
-    stopMetronome();
-    startMetronome();
-  }
+  syncBpmControls(metronomeBpm.value);
 });
 
 recordBtn.addEventListener("click", () => {
@@ -570,9 +707,28 @@ clearLoopBtn.addEventListener("click", () => {
   clearRecording();
 });
 
+grooveSelector.addEventListener("change", () => {
+  if (state.isAutoGroove) {
+    state.autoGrooveStep = 0;
+  }
+});
+
+autoGrooveBpm.addEventListener("input", () => {
+  syncBpmControls(autoGrooveBpm.value);
+});
+
+startGrooveBtn.addEventListener("click", () => {
+  ensureAudioContext();
+  startAutoGroove();
+});
+
+stopGrooveBtn.addEventListener("click", () => {
+  stopAutoGroove();
+});
+
 syncPadPowerState();
 applyKitSelection(state.currentKit);
 refreshLoopStats();
 volumeValue.textContent = `${volumeControl.value}%`;
-metronomeValue.textContent = metronomeBpm.value;
+syncBpmControls(metronomeBpm.value);
 updatePassiveStatus();
